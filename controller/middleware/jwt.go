@@ -1,0 +1,51 @@
+package middleware
+
+import (
+	"TikTokLite_v2/controller/setting"
+	"TikTokLite_v2/util"
+	"github.com/dgrijalva/jwt-go"
+	"github.com/gin-gonic/gin"
+	"log"
+	"net/http"
+)
+
+//ValidDataTokenMiddleWare token鉴权中间件
+func ValidDataTokenMiddleWare(c *gin.Context) {
+	tokenString, exist := c.GetQuery("token")
+	//投稿接口上的token是放在表单里面的
+	if !exist {
+		tokenString = c.PostForm("token")
+	}
+	if tokenString == "" {
+		c.Abort()
+		c.JSON(http.StatusOK, gin.H{
+			"status_code": 0,
+		})
+		return
+	}
+	token, err := jwt.ParseWithClaims(tokenString, &util.Claims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(setting.Conf.Token.SecretKey), nil
+	})
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"status_code": -1,
+			"status_msg":  "unauthorized access",
+		})
+		c.Abort()
+		return
+	} else {
+		if claims, ok := token.Claims.(*util.Claims); ok && token.Valid {
+			c.Set("user_name", claims.Username)
+			c.Set("user_id", claims.UserID)
+			c.Next()
+		} else {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"status_code": -1,
+				"status_msg":  "token is not valid",
+			})
+			c.Abort()
+			return
+		}
+	}
+}
